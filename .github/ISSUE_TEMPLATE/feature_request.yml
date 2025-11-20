@@ -1,0 +1,40 @@
+name: Feature Request
+description: Suggest a new feature for EDMS
+title: "[FEATURE] "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component would this feature affect?
+      options:
+        - Backend API
+        - Frontend UI
+        - Database
+        - Authentication
+        - Document Workflow
+        - File Storage
+        - Other
+    validations:
+      required: true
+      
+  - type: textarea
+    id: description
+    attributes:
+      label: Feature Description
+      description: Describe the feature you'd like to see
+    validations:
+      required: true
+      
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - Low
+        - Medium
+        - High
+        - Critical
+    validations:
+      required: true
