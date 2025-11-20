@@ -1,0 +1,46 @@
+# EDMS Docker Compose Configuration (Fallback)
+# For environments where Docker is used instead of Podman
+# See podman-compose.yml for the recommended Podman configuration
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16
+    container_name: edms_postgres
+    environment:
+      POSTGRES_DB: edms_dev
+      POSTGRES_USER: edms_user
+      POSTGRES_PASSWORD: dev_password_123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: edms_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # Elasticsearch
+  elasticsearch:
+    image: elasticsearch:8.11.0
+    container_name: edms_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+
+volumes:
+  postgres_data:
+  redis_data:
+  elasticsearch_data:

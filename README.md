@@ -119,3 +119,58 @@ For security concerns, please review our [Security Policy](SECURITY.md).
 - **Documentation**: [Project Wiki](https://github.com/your-org/edms-system/wiki)
 - **Issues**: [GitHub Issues](https://github.com/your-org/edms-system/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/your-org/edms-system/discussions)
+
+## 🐳 Container Architecture
+
+This project uses **Podman** as the recommended container runtime for 21 CFR Part 11 compliance and production deployment.
+
+### Quick Start with Podman
+
+```bash
+# Install Podman (recommended)
+# macOS: brew install podman
+# Ubuntu: sudo apt-get install -y podman
+# RHEL/CentOS: sudo dnf install -y podman
+
+# Install podman-compose
+pip install podman-compose
+
+# Start development environment
+bash scripts/quickstart.sh
+```
+
+### Container Services
+
+- **PostgreSQL 16**: Primary database with audit capabilities
+- **Redis 7**: Cache and session store  
+- **Elasticsearch 8**: Document search and indexing
+- **Django**: Web application (when ready)
+- **Celery**: Background task processing
+
+### Development Commands
+
+```bash
+# Start core services (DB, Redis, Elasticsearch)
+podman-compose up -d
+
+# Start all services including Django and Celery
+podman-compose --profile full up -d
+
+# View service status
+podman-compose ps
+
+# View logs
+podman-compose logs
+
+# Stop all services
+podman-compose down
+```
+
+### Docker Fallback
+
+Docker can be used as a fallback, but Podman is recommended for production compliance:
+
+```bash
+# If using Docker instead of Podman
+docker-compose up -d
+```

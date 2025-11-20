@@ -1,0 +1,163 @@
+# EDMS Podman Compose Configuration
+# 21 CFR Part 11 Compliant Electronic Document Management System
+# This configuration provides the complete development environment
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16
+    container_name: edms_postgres
+    environment:
+      POSTGRES_DB: edms_dev
+      POSTGRES_USER: edms_user
+      POSTGRES_PASSWORD: dev_password_123
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/containers/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:Z
+    networks:
+      - edms-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U edms_user -d edms_dev"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis Cache and Session Store
+  redis:
+    image: redis:7-alpine
+    container_name: edms_redis
+    command: redis-server --appendonly yes --requirepass dev_redis_password
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./infrastructure/containers/redis/redis.conf:/usr/local/etc/redis/redis.conf:Z
+    networks:
+      - edms-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "dev_redis_password", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Elasticsearch for Document Search
+  elasticsearch:
+    image: elasticsearch:8.11.0
+    container_name: edms_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - xpack.security.enabled=false
+      - xpack.monitoring.collection.enabled=false
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - edms-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Django Application (when ready)
+  web:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: edms_web
+    environment:
+      - DJANGO_SETTINGS_MODULE=edms.settings.development
+      - DATABASE_URL=postgresql://edms_user:dev_password_123@db:5432/edms_dev
+      - REDIS_URL=redis://:dev_redis_password@redis:6379/0
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+    volumes:
+      - ./backend:/app:Z
+      - ./storage:/edms-storage:Z
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+      - elasticsearch
+    networks:
+      - edms-network
+    restart: unless-stopped
+    profiles:
+      - full  # Only start with: podman-compose --profile full up
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Celery Worker for Background Tasks
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: edms_celery_worker
+    command: celery -A edms worker -l info
+    environment:
+      - DJANGO_SETTINGS_MODULE=edms.settings.development
+      - DATABASE_URL=postgresql://edms_user:dev_password_123@db:5432/edms_dev
+      - REDIS_URL=redis://:dev_redis_password@redis:6379/0
+    volumes:
+      - ./backend:/app:Z
+      - ./storage:/edms-storage:Z
+    depends_on:
+      - db
+      - redis
+    networks:
+      - edms-network
+    restart: unless-stopped
+    profiles:
+      - full
+
+  # Celery Beat for Scheduled Tasks
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: edms_celery_beat
+    command: celery -A edms beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    environment:
+      - DJANGO_SETTINGS_MODULE=edms.settings.development
+      - DATABASE_URL=postgresql://edms_user:dev_password_123@db:5432/edms_dev
+      - REDIS_URL=redis://:dev_redis_password@redis:6379/0
+    volumes:
+      - ./backend:/app:Z
+      - ./storage:/edms-storage:Z
+    depends_on:
+      - db
+      - redis
+    networks:
+      - edms-network
+    restart: unless-stopped
+    profiles:
+      - full
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+
+networks:
+  edms-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
